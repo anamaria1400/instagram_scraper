@@ -1,9 +1,44 @@
 import time
+
+from model_es import model_es
 from selenium_handler.selenium_handler import SeleniumHandler
 from xpaths import xpaths
 from selenium.webdriver.common.keys import Keys
+import json
+from model_es import *
 
 selenium_handler_instance = SeleniumHandler()
+
+dictionary_followers = {
+    "cont": [],
+    "link": [],
+    "name": []
+}
+dictionary_following = {
+    "cont": [],
+    "link": [],
+    "name": []
+}
+
+def scrape_list(nr):
+    fBody = selenium_handler_instance.driver.find_element_by_xpath(xpaths.b_1)
+    scroll = 0
+    while scroll < 50:  # scroll 50 times
+        selenium_handler_instance.driver.execute_script(xpaths.b_2, fBody)
+        time.sleep(2)
+        scroll += 1
+        fList = selenium_handler_instance.driver.find_elements_by_xpath(xpaths.b_3)
+        if len(fList) == nr:
+            break
+
+def open_page(x):
+    btn = selenium_handler_instance.wait_for_element(x)
+    if (btn == True):
+        selenium_handler_instance.driver.find_element_by_xpath(x).click()
+        print("Open all followers")
+    else:
+        print("Eroare open all followers")
+    time.sleep(2)
 
 while True:
     try:
@@ -48,42 +83,65 @@ while True:
         search_box.send_keys(Keys.ENTER)
 
         #deschidem lista de urmaritori
-        btn_followers = selenium_handler_instance.wait_for_element(xpaths.followers)
-        if (btn_followers == True):
-            selenium_handler_instance.driver.find_element_by_xpath(xpaths.followers).click()
-            print("Open all followers")
-        else:
-            print("Eroare open all followers")
-        time.sleep(2)
+        open_page(xpaths.followers)
+        #incarcam toata lista
+        scrape_list(xpaths.nr_urmaritori)
 
-        # scoatem lista cu numele prietenilor
-        # get followers count
-        followers_count = xpaths.followers
+        # contul + link
+        cont = selenium_handler_instance.driver.find_elements_by_xpath(xpaths.cont)
 
-        #selenium_handler_instance.driver.execute_script()
+        # numele
+        nume = selenium_handler_instance.driver.find_elements_by_xpath(xpaths.nume)
 
-        lenOfPage = selenium_handler_instance.driver.execute_script('''
-                        var fDialog = document.querySelector('div[role="dialog"] .isgrP');
-                        fDialog.scrollTop = fDialog.scrollHeight
-                    ''')
-        match = False
-        while (match == False):
-            lastCount = lenOfPage
-            time.sleep(3)
-            lenOfPage = selenium_handler_instance.driver.execute_script('''
-                        var fDialog = document.querySelector('div[role="dialog"] .isgrP');
-                        fDialog.scrollTop = fDialog.scrollHeight
-                    ''')
-            if lastCount == lenOfPage:
-                match = True
-        list_of_followers = selenium_handler_instance.driver.find_elements_by_xpath('//div[@class="PZuss"]/li/div / div / div[2] / div / span / a')
+        for i in cont:
+            dictionary_followers["cont"].append(i.text)
+            dictionary_followers["link"].append(i.get_attribute('href'))
 
-        #new_list_of_followers = []
-        #for i in list_of_followers:
-        #    new_list_of_followers.append(i.text)
-        #    print(i.text)
+        for i in nume:
+            dictionary_followers["name"].append(i.text)
+
+        selenium_handler_instance.driver.find_element_by_xpath(xpaths.button_x).click()
+
+        # deschidem lista de urmariti
+        open_page(xpaths.following)
+        #incarcam lista
+        scrape_list(xpaths.nr_urmariti)
+
+        # contul + link
+        cont = selenium_handler_instance.driver.find_elements_by_xpath(xpaths.cont)
+
+        # numele
+        nume = selenium_handler_instance.driver.find_elements_by_xpath(xpaths.nume)
+
+        for i in cont:
+            dictionary_following["cont"].append(i.text)
+            dictionary_following["link"].append(i.get_attribute('href'))
+
+        for i in nume:
+            dictionary_following["name"].append(i.text)
+
+        selenium_handler_instance.close_driver()
+
+        print("\n\n--------------------------DICTIONARY---------------------------\n\n")
+        print(dictionary_followers)
+        print(dictionary_following)
+
+        a = json.dumps(dictionary_followers, indent=5)
+        print(a)
+        b = json.dumps(dictionary_followers, indent=5)
+        print(b)
+
+        # with open("urmaritori.json", "w") as outfile:
+        #     json.dump(dictionary_followers, outfile, indent=5)
+        model_es.send_json_to_es(dictionary_followers)
+
+
+        # with open("urmariti.json", "w") as outfile:
+        #     json.dump(dictionary_following, outfile, indent=5)
+        model_es.send_json_to_es(dictionary_following)
 
         break
+
     except ValueError:
         print("failed")
 
